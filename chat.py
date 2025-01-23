@@ -1,6 +1,6 @@
 # from openai import AsyncOpenAI
 import chainlit as cl
-from chainlit.input_widget import Select, TextInput
+from chainlit.input_widget import Select, TextInput, Slider
 import httpx
 from dotenv import load_dotenv
 import os
@@ -52,17 +52,19 @@ def build_sys_prompt(system_prompt_base, conversation_history):
 async def generate_completion(system_prompt, user_prompt, model):
     url = base_url + "v1/chat/completions"  # Make sure this endpoint is correct
     headers = {"Content-Type": "application/json"}
+    temp = cl.user_session.get("temp")
+    top_p = cl.user_session.get("top_p")
+    top_k = cl.user_session.get("top_k")
     data = {
         "model": model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        "temperature": 0.6,
-        # the params below made it worse, TODO: find out why
-        # "temperature": 0.7,  # Adjusted for slightly more randomness
-        # "top_k": 50,  # Restricts sampling to the top 50 tokens
-        # "top_p": 0.9,  # Considers top 90% of probability mass
+        # "temperature": 0.6,
+        "temperature": temp,
+        "top_p": top_p,
+        "top_k": top_k,
         "stop": "<|eot_id|>",
     }
     timeout = httpx.Timeout(30.0)
@@ -96,6 +98,9 @@ async def on_message(message: cl.Message):
 @cl.on_settings_update
 async def setup_agent(settings):
     print("on_settings_update", settings)
+    cl.user_session.set("temp", settings["temp"])
+    cl.user_session.set("top_p", settings["top_p"])
+    cl.user_session.set("top_k", settings["top_k"])
     if settings["Custom Prompt"] is None:
         cl.user_session.set("Prompt", system_prompts[settings["Prompt"]])
     else:
@@ -106,6 +111,9 @@ async def setup_agent(settings):
 async def start():
     cl.user_session.set("history", [])
     cl.user_session.set("Prompt", system_prompts["flirty"])
+    cl.user_session.set("temp", 0.6)
+    cl.user_session.set("top_p", 1)
+    cl.user_session.set("top_k", -1)
     settings = await cl.ChatSettings(
         [
             Select(
@@ -118,6 +126,30 @@ async def start():
                 id="Custom Prompt",
                 label="Custom Prompt",
                 initial="",
+            ),
+            Slider(
+                id="temp",
+                label="Temperature",
+                initial=0.6,
+                min=0,
+                max=2,
+                step=0.1,
+            ),
+            Slider(
+                id="top_p",
+                label="Top P",
+                initial=1,
+                min=0.1,
+                max=1,
+                step=0.1,
+            ),
+            Slider(
+                id="top_k",
+                label="Top K",
+                initial=-1,
+                min=-1,
+                max=1000,
+                step=1,
             ),
         ]
     ).send()
