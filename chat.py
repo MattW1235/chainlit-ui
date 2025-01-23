@@ -1,36 +1,52 @@
 # from openai import AsyncOpenAI
 import chainlit as cl
+from chainlit.input_widget import Select
 import httpx
-import json
+from dotenv import load_dotenv
+import os
 
-model = "meta-llama/Meta-Llama-3-8B-Instruct" # This must be the full uhgging face path and must match your model in your deployment.
-base_url = "https://3fkhcnr70a8mj4-8000.proxy.runpod.net/"
+load_dotenv()
+
+
+model = os.environ.get("MODEL")
+base_url = os.environ.get("VLLM_URL")
 conversation_history = []
 
 
 def format_conversation_history(history):
     # Convert the list of tuples to a string and remove square brackets
-    formatted_history = str(history).strip('[]')
+    formatted_history = str(history).strip("[]")
 
     # Replace the tuples' parentheses and clean up the format
-    formatted_history = formatted_history.replace('), (', '; ').replace('(', '').replace(')', '')
+    formatted_history = (
+        formatted_history.replace("), (", "; ").replace("(", "").replace(")", "")
+    )
 
     return formatted_history
 
 
-system_prompt_base = f"""You are a sarcastic person, named Llama.
+system_prompts = {
+    "flirty": f"""
+You are a flirty LLM whose purpose is to represent a female only fans model. Make your responses flirty. Type like a human would if they were sending text messages on a phone.
+""",
+    "rude": f"""
+You are a rude LLM whose purpose is to represent a female only fans model. Make your responses rude. Type like a human would if they were sending text messages on a phone.
+                  """,
+    "friendly": f"""
+You are a friendly LLM whose purpose is to represent a female only fans model. Make your responses friendly. Type like a human would if they were sending text messages on a phone.    
+""",
+}
 
-You are chatting with a person. All your responses should be witty, and sarcastic.
-
-You should roast the user, but in a friendly way.
+history_prompt = f"""
 
 Here's the recent conversation history for your reference:
 
 """
 
+
 def build_sys_prompt(system_prompt_base, conversation_history):
     formatted_history = format_conversation_history(history=conversation_history)
-    prompt = system_prompt_base + formatted_history
+    prompt = system_prompt_base + history_prompt + formatted_history
     return prompt
 
 
@@ -41,13 +57,13 @@ async def generate_completion(system_prompt, user_prompt, model):
         "model": model,
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
+            {"role": "user", "content": user_prompt},
         ],
         "temperature": 0.6,
-        "stop": "<|eot_id|>"
+        "stop": "<|eot_id|>",
     }
     timeout = httpx.Timeout(30.0)
-    
+
     # Use httpx.AsyncClient to make the POST request
     async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post(url, headers=headers, json=data)
@@ -59,14 +75,35 @@ async def generate_completion(system_prompt, user_prompt, model):
 
 @cl.on_message
 async def on_message(message: cl.Message):
-
+    system_prompt_base = system_prompts[cl.user_session.get("Prompt")]
     system_prompt = build_sys_prompt(system_prompt_base, conversation_history)
     user_prompt = message.content
     response = await generate_completion(system_prompt, user_prompt, model)
 
-    print(F"RESPONSE: {response}")
-    assistant_response = response['choices'][0]['message']['content']
+    print(f"RESPONSE: {response}")
+    assistant_response = response["choices"][0]["message"]["content"]
     await cl.Message(content=assistant_response).send()
 
     conversation_history.append((message.content, assistant_response))
     print("HISTORY:", conversation_history)
+
+
+@cl.on_settings_update
+async def setup_agent(settings):
+    print("on_settings_update", settings)
+    cl.user_session.set("Prompt", settings["Prompt"])
+
+
+@cl.on_chat_start
+async def start():
+    cl.user_session.set("Prompt", "flirty")
+    settings = await cl.ChatSettings(
+        [
+            Select(
+                id="Prompt",
+                label="Prompt",
+                values=["flirty", "rude", "friendly"],
+                initial_index=0,
+            ),
+        ]
+    ).send()
