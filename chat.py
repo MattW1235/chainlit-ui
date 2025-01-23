@@ -1,6 +1,6 @@
 # from openai import AsyncOpenAI
 import chainlit as cl
-from chainlit.input_widget import Select
+from chainlit.input_widget import Select, TextInput
 import httpx
 from dotenv import load_dotenv
 import os
@@ -75,7 +75,7 @@ async def generate_completion(system_prompt, user_prompt, model):
 
 @cl.on_message
 async def on_message(message: cl.Message):
-    system_prompt_base = system_prompts[cl.user_session.get("Prompt")]
+    system_prompt_base = cl.user_session.get("Prompt")
     system_prompt = build_sys_prompt(system_prompt_base, conversation_history)
     user_prompt = message.content
     response = await generate_completion(system_prompt, user_prompt, model)
@@ -91,12 +91,15 @@ async def on_message(message: cl.Message):
 @cl.on_settings_update
 async def setup_agent(settings):
     print("on_settings_update", settings)
-    cl.user_session.set("Prompt", settings["Prompt"])
+    if not settings["Custom Prompt"]:
+        cl.user_session.set("Prompt", system_prompts[settings["Prompt"]])
+    else:
+        cl.user_session.set("Prompt", settings["Custom Prompt"])
 
 
 @cl.on_chat_start
 async def start():
-    cl.user_session.set("Prompt", "flirty")
+    cl.user_session.set("Prompt", system_prompts["flirty"])
     settings = await cl.ChatSettings(
         [
             Select(
@@ -104,6 +107,11 @@ async def start():
                 label="Prompt",
                 values=["flirty", "rude", "friendly"],
                 initial_index=0,
+            ),
+            TextInput(
+                id="Custom Prompt",
+                label="Custom Prompt",
+                initial="",
             ),
         ]
     ).send()
