@@ -91,7 +91,7 @@ async def on_message(message: cl.Message):
 @cl.on_settings_update
 async def setup_agent(settings):
     print("on_settings_update", settings)
-    if not settings["Custom Prompt"]:
+    if settings["Custom Prompt"] is None:
         cl.user_session.set("Prompt", system_prompts[settings["Prompt"]])
     else:
         cl.user_session.set("Prompt", settings["Custom Prompt"])
