@@ -10,7 +10,7 @@ load_dotenv()
 
 model = os.environ.get("MODEL")
 base_url = os.environ.get("VLLM_URL")
-conversation_history = []
+# conversation_history = []
 
 
 def format_conversation_history(history):
@@ -75,6 +75,7 @@ async def generate_completion(system_prompt, user_prompt, model):
 
 @cl.on_message
 async def on_message(message: cl.Message):
+    conversation_history = cl.user_session.get("history")
     system_prompt_base = cl.user_session.get("Prompt")
     system_prompt = build_sys_prompt(system_prompt_base, conversation_history)
     user_prompt = message.content
@@ -85,6 +86,7 @@ async def on_message(message: cl.Message):
     await cl.Message(content=assistant_response).send()
 
     conversation_history.append((message.content, assistant_response))
+    cl.user_session.set("history", conversation_history)
     print("HISTORY:", conversation_history)
 
 
@@ -99,6 +101,7 @@ async def setup_agent(settings):
 
 @cl.on_chat_start
 async def start():
+    cl.user_session.set("history", [])
     cl.user_session.set("Prompt", system_prompts["flirty"])
     settings = await cl.ChatSettings(
         [
