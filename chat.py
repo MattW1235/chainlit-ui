@@ -38,6 +38,8 @@ You are a friendly 23 year old girl from Essex in England. You do a bit of model
 }
 
 history_prompt = f"""
+Don't use markdown in your responses.
+
 Here's the recent conversation history for your reference:
 
 """
